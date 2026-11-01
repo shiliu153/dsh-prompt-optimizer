@@ -9,16 +9,16 @@ instruction itself is editable in Settings.
 
 ## Install
 
-Local directory (use this before the repository is published):
-
-```
-plugin_manager install_bundle C:\Users\20157\daily_work\dsh-prompt-optimizer
-```
-
-From the repository, once published:
+From the repository:
 
 ```
 plugin_manager install_bundle https://github.com/shiliu153/dsh-prompt-optimizer
+```
+
+From a local checkout while developing (code changes need a restart):
+
+```
+plugin_manager install_bundle C:\Users\20157\daily_work\dsh-prompt-optimizer
 ```
 
 The button appearing in the composer toolbar is the success signal: it means the

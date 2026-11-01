@@ -28,16 +28,16 @@
 
 ### 安装
 
-本机目录安装（尚未发布到远端仓库时用这条）：
-
-```
-plugin_manager install_bundle C:\Users\20157\daily_work\dsh-prompt-optimizer
-```
-
-仓库发布后也可以用地址安装：
+从仓库安装：
 
 ```
 plugin_manager install_bundle https://github.com/shiliu153/dsh-prompt-optimizer
+```
+
+开发中的本地目录安装（改动代码需要重启才生效）：
+
+```
+plugin_manager install_bundle C:\Users\20157\daily_work\dsh-prompt-optimizer
 ```
 
 安装后按钮出现在输入框工具栏、模型选择器左侧。**该按钮可见即表示插件已挂载**；看不到按钮说明 bundle 未激活，而不是模型不可用。
