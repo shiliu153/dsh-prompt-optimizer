@@ -38,7 +38,23 @@
 
 1. 插件列表出现「提示词优化」，无激活失败诊断；
 2. 输入框工具栏、模型选择器左侧出现星芒按钮，hover/focus 与 `+` 按钮一致；
-3. 输入一段草稿 → 点击 → 草稿被改写结果替换（一次可撤销）；
+3. 输入一段草稿 → 点击 → 草稿被改写结果替换；
 4. 不选模型时点击 → 气泡提示「请先选择模型」；
 5. `设置 → 提示词优化` 改指令 → 保存 → 再次点击使用新指令；
 6. 控制台无 `slot entry crashed in 'conversation.input.right'`。
+
+## v0.1.1：改写期间的并发输入
+
+**发现（读 `dsh-client-ui-conversation` 源码，非运行时）**：
+
+| 事实 | 出处 |
+|---|---|
+| `inputActions.setDraft` 直接调 `SessionInputShell.setDraft`，**不检查** `phase`（`adjudicating`/`submitting`）与 `disposed` | `lib/client.js` L14951-14953、L15037-15048 |
+| `DraftEditor.setDraft` 用 `tag: "history-merge"` 更新编辑器 → 并入当前历史条目，**不是独立撤销步** | L14686-14696、L7496（`xo = "history-merge"`） |
+| 只有 `inputActions.insertText` 走 `insertAsyncText`（`tag: "paste"`），才是独立撤销步，且带 phase + `draftRev` 双守卫 | L14946-14950、L14772-14779 |
+
+后果有两条：**(a)** 原 README 写的「一次可撤销、Ctrl+Z 回到改写前」是错的；**(b)** 改写进行中用户继续输入，`setDraft` 会静默覆盖这些新输入。
+
+**修复**：点击时记下 `draftRev`，返回时版本不一致就不再替换，改为提示「草稿已改动，本次结果未替换」；纯函数 `canApply(clickedRev, currentRev)` 导出到 `__test` 并加单测。没有改用 `insertText`，因为它的 span 走 detect 坐标，带文件引用的草稿上 `detectText` 与 `clipboardText` 长度可能不同，整篇替换用 `setDraft` 才是安全路径。
+
+**仍未运行时验证**：以上结论来自源码与单测，浏览器里的实际观感（气泡位置、按钮状态、真实改写）依旧待人工确认。

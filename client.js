@@ -19,6 +19,7 @@ window.__ModuleLoader__.load({
       emptyDraft: '先输入内容，再用当前模型优化',
       noModel: '请先在模型选择器里选一个模型',
       emptyResponse: '模型没有返回任何文本',
+      draftChanged: '草稿在你编辑期间已改动，本次结果未替换',
       nav: '提示词优化',
       settingsTitle: '提示词优化',
       settingsDesc: '输入框工具栏上的按钮会用当前选择的模型改写草稿。这里编辑发给模型的指令，保存后下一次点击立即生效。',
@@ -42,6 +43,7 @@ window.__ModuleLoader__.load({
       emptyDraft: 'Type something first',
       noModel: 'Select a model first',
       emptyResponse: 'The model returned no text',
+      draftChanged: 'The draft changed while optimizing, so the result was not applied',
       nav: 'Prompt Optimizer',
       settingsTitle: 'Prompt Optimizer',
       settingsDesc:
@@ -85,6 +87,20 @@ window.__ModuleLoader__.load({
       const message = body && body.error && body.error.message;
       if (typeof message === 'string' && message !== '') return message;
       return 'HTTP ' + String(status);
+    }
+
+    /**
+     * Whether a finished rewrite may still replace the draft it started from.
+     *
+     * A rewrite takes seconds; typing during it bumps the draft revision. The
+     * replacement is a whole-document write, so applying a result computed from
+     * an older revision would silently discard what the user typed meanwhile.
+     * @param clickedRev - revision captured when the button was pressed.
+     * @param currentRev - revision at the moment the answer arrived.
+     * @returns true only when the draft has not changed since the click.
+     */
+    function canApply(clickedRev, currentRev) {
+      return clickedRev === currentRev;
     }
 
     // Colours are theme tokens only, and the control copies the host's own
@@ -155,16 +171,25 @@ window.__ModuleLoader__.load({
     /**
      * The composer button: rewrite the whole draft with the selected model.
      *
-     * A successful rewrite replaces the draft through `inputActions.setDraft`,
-     * which is one undoable edit; a failure leaves the draft untouched and
-     * surfaces the reason in a bubble anchored above the button.
+     * A successful rewrite replaces the draft through `inputActions.setDraft`, a
+     * whole-document write the editor merges into its history rather than
+     * recording as a separate undo step — so the button only applies an answer
+     * whose draft revision is still current. A failure leaves the draft
+     * untouched and surfaces the reason in a bubble anchored above the button.
      */
     function OptimizeButton(props) {
       const t = props.t;
       const draft = props.useInput((s) => s.draft);
+      const draftRev = props.useInput((s) => s.draftRev);
       const [busy, setBusy] = React.useState(false);
       const [error, setError] = React.useState('');
       const alive = React.useRef(true);
+      // Mirrors the newest revision so the comparison after `await` reads the
+      // committed value rather than the one captured at click time.
+      const liveRev = React.useRef(draftRev);
+      React.useEffect(() => {
+        liveRev.current = draftRev;
+      }, [draftRev]);
 
       React.useEffect(
         () => () => {
@@ -185,6 +210,7 @@ window.__ModuleLoader__.load({
       async function run() {
         if (busy) return;
         const text = draft;
+        const clickedRev = draftRev;
         const model = props.readModel();
         if (!isModelReady(model)) {
           setError(t('noModel'));
@@ -202,7 +228,12 @@ window.__ModuleLoader__.load({
           if (!response.ok) throw new Error(errorText(response.status, body));
           const next = body && typeof body.text === 'string' ? body.text : '';
           if (next === '') throw new Error(t('emptyResponse'));
-          if (alive.current) props.inputActions.setDraft(next);
+          if (!alive.current) return;
+          if (!canApply(clickedRev, liveRev.current)) {
+            setError(t('draftChanged'));
+            return;
+          }
+          props.inputActions.setDraft(next);
         } catch (e) {
           if (alive.current) setError(String((e && e.message) || e));
         } finally {
@@ -423,7 +454,7 @@ window.__ModuleLoader__.load({
           ),
         );
       },
-      __test: { NS, API, isModelReady, buildRequest, errorText, ZH, EN },
+      __test: { NS, API, isModelReady, buildRequest, errorText, canApply, ZH, EN },
     };
   },
 });

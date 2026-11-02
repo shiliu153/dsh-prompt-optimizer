@@ -52,7 +52,7 @@ plugin_manager install_bundle C:\Users\20157\daily_work\dsh-prompt-optimizer
 | 请求进行中 | 图标转为转圈并禁用，重复点击无效 |
 | 改写失败 | 草稿保持原样，气泡显示失败原因（8 秒后自动消失） |
 
-改写后按 Ctrl+Z 可撤销，回到改写前的文本。
+替换是一次整段写入，编辑器把它并入当前的历史记录而不是单独压一个撤销步；改写期间如果你继续输入，结果不会覆盖你的新内容，而是提示「草稿已改动，本次结果未替换」。
 
 ### 设置
 
@@ -135,6 +135,8 @@ cordis.patch.yml    本包自身的 patch，注册 dsh-prompt-optimizer
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
 
+- **改写是一次整段写入，不保证一步撤销**。`inputActions.setDraft` 走的是编辑器的整篇替换路径，历史记录按 `history-merge` 合并，所以 Ctrl+Z 未必能精确回到改写前的文本。需要可靠回退的话，先自己复制一份原文。
+- **改写期间继续输入会丢弃结果**。点击时记下草稿版本号，返回时版本已变就不再替换，并提示「草稿已改动」；不会覆盖你新输入的内容。
 - **只优化整段草稿**，不支持"选中一段只改这一段"。选区路径需要把结果插回原位置，失败分支明显更多，当前版本不做。
 - **没有对比预览**。改写直接替换，靠撤销回退；如果你想要 diff 式确认，需要额外的浮层与二次确认流程。
 - **不流式呈现**。模型生成过程中输入框不变，只有完成或失败两种状态。
@@ -160,6 +162,7 @@ cordis.patch.yml    本包自身的 patch，注册 dsh-prompt-optimizer
 | 模型返回空文本 | 502 `empty_response`，不替换草稿 |
 | 120 秒未完成 | 504 `timeout` |
 | 请求途中切换会话 | 结果丢弃，不写入其他会话 |
+| 改写期间草稿被修改 | 不替换，提示「草稿已改动」 |
 | 请求体不是 JSON | 400 `bad_request` |
 
 -----
@@ -171,7 +174,7 @@ cordis.patch.yml    本包自身的 patch，注册 dsh-prompt-optimizer
 <summary>维护者的工作上下文——点击展开</summary>
 
 ```sh
-node --test "test/*.test.mjs"        # 22 个测试，零依赖
+node --test "test/*.test.mjs"        # 23 个测试，零依赖
 node scripts/check-bundle.mjs .      # bundle 合规自检，失败时退出码非零
 ```
 

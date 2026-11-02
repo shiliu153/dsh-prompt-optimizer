@@ -35,7 +35,10 @@ model is unavailable.
 | While a rewrite runs | The icon becomes a spinner and the button is disabled |
 | Rewrite fails | The draft is untouched; the reason shows in the bubble for 8 seconds |
 
-The replacement is a single undoable edit: Ctrl+Z restores the previous text.
+The replacement is a whole-document write: the editor merges it into the current
+history entry instead of pushing a separate undo step. If you keep typing while a
+rewrite runs, the result does not overwrite your text — the button reports that the
+draft changed and leaves it alone.
 
 ## Settings
 
@@ -106,6 +109,13 @@ sources never call `require()` and only import `node:` builtins or relative file
 
 ## Known limitations
 
+- **The replacement is not guaranteed to be one undo step.** `inputActions.setDraft`
+  is the editor's whole-document write and its history entry is merged
+  (`history-merge`), so Ctrl+Z may not land exactly on the pre-rewrite text. Copy
+  the original first if you need a reliable way back.
+- **Typing during a rewrite discards the result.** The click records the draft
+  revision; if it changed by the time the answer arrives, nothing is replaced and
+  the button says so.
 - **Whole-draft rewrites only.** Optimizing a selection needs an insert back at the
   exact range and has more failure paths; this version does not attempt it.
 - **No diff preview.** The result replaces the draft and undo is the way back.
@@ -133,12 +143,13 @@ appears in the bubble above the button.
 | Model returns no text | 502 `empty_response`, draft untouched |
 | No completion within 120s | 504 `timeout` |
 | Session switched mid-flight | Result discarded |
+| Draft edited while the rewrite ran | Not applied; the button reports the change |
 | Body is not JSON | 400 `bad_request` |
 
 ## Development
 
 ```sh
-node --test "test/*.test.mjs"        # 22 tests, zero dependencies
+node --test "test/*.test.mjs"        # 23 tests, zero dependencies
 node scripts/check-bundle.mjs .      # bundle compliance self-check, non-zero on failure
 ```
 

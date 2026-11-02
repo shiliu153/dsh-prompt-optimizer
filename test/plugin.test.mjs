@@ -238,7 +238,13 @@ test('the optimize route answers a rewrite and a coded failure', async () => {
 
 // ---- client bundle ----
 
-test('the client bundle exposes its pure helpers', async () => {
+/**
+ * Load client.js against a stub module table and return the module it registers.
+ *
+ * The bundle is a classic script, so it is evaluated with a stand-in `window`
+ * instead of being imported; `react` is the only module it asks for.
+ */
+function loadClient() {
   const loaded = [];
   globalThis.window = {
     __ModuleLoader__: {
@@ -247,20 +253,20 @@ test('the client bundle exposes its pure helpers', async () => {
       },
     },
   };
-  const file = new URL('../client.js', import.meta.url);
-  const source = fs.readFileSync(file, 'utf8');
-  // The bundle is a classic script; evaluate it with a stub module table.
-  const run = new Function('window', source);
-  run(globalThis.window);
+  const source = fs.readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  new Function('window', source)(globalThis.window);
   assert.equal(loaded.length, 1);
   assert.equal(loaded[0].id, '@dsh-contrib/dsh-prompt-optimizer');
-
   const reactStub = { createElement: () => null };
-  const mod = loaded[0].factory((name) => {
+  return loaded[0].factory((name) => {
     if (name === 'react') return reactStub;
     throw new Error(`unexpected require: ${name}`);
   });
-  const { isModelReady, buildRequest, errorText } = mod.__test;
+}
+
+test('the client bundle exposes its pure helpers', () => {
+  const mod = loadClient();
+  const { isModelReady, buildRequest, errorText, ZH, EN } = mod.__test;
   assert.equal(isModelReady({ provider: 'p', model: 'm' }), true);
   assert.equal(isModelReady({ provider: '', model: 'm' }), false);
   assert.equal(isModelReady(undefined), false);
@@ -273,6 +279,19 @@ test('the client bundle exposes its pure helpers', async () => {
   assert.equal(errorText(500, null), 'HTTP 500');
   assert.deepEqual(mod.inject, ['slots', 'locale']);
   assert.equal(typeof mod.apply, 'function');
+  // Every key the button can raise must exist in both dictionaries, or a
+  // localized build would surface the raw key instead of a sentence.
+  for (const dictionary of [ZH, EN]) {
+    assert.equal(typeof dictionary.draftChanged, 'string');
+    assert.notEqual(dictionary.draftChanged, '');
+  }
+});
+
+test('a rewrite only replaces the draft it was computed from', () => {
+  const { canApply } = loadClient().__test;
+  assert.equal(canApply(3, 3), true);
+  assert.equal(canApply(3, 4), false, 'typing during the request must block the replacement');
+  assert.equal(canApply(0, 0), true);
 });
 
 // ---- manifest ----
