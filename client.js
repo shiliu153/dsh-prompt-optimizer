@@ -15,11 +15,10 @@ window.__ModuleLoader__.load({
 
     const ZH = {
       action: '优化提示词',
-      busy: '优化中…',
       emptyDraft: '先输入内容，再用当前模型优化',
       noModel: '请先在模型选择器里选一个模型',
       emptyResponse: '模型没有返回任何文本',
-      draftChanged: '草稿在你编辑期间已改动，本次结果未替换',
+      cancel: '取消优化',
       nav: '提示词优化',
       settingsTitle: '提示词优化',
       settingsDesc: '输入框工具栏上的按钮会用当前选择的模型改写草稿。这里编辑发给模型的指令，保存后下一次点击立即生效。',
@@ -39,11 +38,10 @@ window.__ModuleLoader__.load({
     };
     const EN = {
       action: 'Optimize prompt',
-      busy: 'Optimizing…',
       emptyDraft: 'Type something first',
       noModel: 'Select a model first',
       emptyResponse: 'The model returned no text',
-      draftChanged: 'The draft changed while optimizing, so the result was not applied',
+      cancel: 'Cancel optimization',
       nav: 'Prompt Optimizer',
       settingsTitle: 'Prompt Optimizer',
       settingsDesc:
@@ -89,19 +87,7 @@ window.__ModuleLoader__.load({
       return 'HTTP ' + String(status);
     }
 
-    /**
-     * Whether a finished rewrite may still replace the draft it started from.
-     *
-     * A rewrite takes seconds; typing during it bumps the draft revision. The
-     * replacement is a whole-document write, so applying a result computed from
-     * an older revision would silently discard what the user typed meanwhile.
-     * @param clickedRev - revision captured when the button was pressed.
-     * @param currentRev - revision at the moment the answer arrived.
-     * @returns true only when the draft has not changed since the click.
-     */
-    function canApply(clickedRev, currentRev) {
-      return clickedRev === currentRev;
-    }
+    // ---- components ----
 
     // Colours are theme tokens only, and the control copies the host's own
     // composer `+` button (28px circle, selector fill, solid hover) so the row
@@ -115,6 +101,12 @@ window.__ModuleLoader__.load({
 .dsh-po-spin { animation: dsh-po-spin 900ms linear infinite; transform-origin: 50% 50%; }
 @keyframes dsh-po-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .dsh-po-spin { animation-duration: 2400ms; } }
+/* Both icons share one grid cell: the spinner shows progress, and hover or
+ * keyboard focus swaps it for the cancel mark so the same button can stop it. */
+.dsh-po-button > svg { grid-area: 1 / 1; }
+.dsh-po-cancel { display: none; }
+.dsh-po-button[data-busy='true']:hover .dsh-po-cancel, .dsh-po-button[data-busy='true']:focus-visible .dsh-po-cancel { display: block; }
+.dsh-po-button[data-busy='true']:hover .dsh-po-spin, .dsh-po-button[data-busy='true']:focus-visible .dsh-po-spin { display: none; }
 .dsh-po-error { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 40; max-width: 280px; width: max-content; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); box-shadow: var(--dsw-elevation-prominent); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; padding: 8px 10px; }
 .dsh-po-section { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 24px; }
 .dsh-po-h { margin: 0; color: var(--dsw-alias-label-primary); font-size: 16px; font-weight: 600; line-height: 24px; }
@@ -168,32 +160,46 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** The cancel mark that replaces the spinner once the running button is hovered. */
+    function CancelIcon() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true, className: 'dsh-po-cancel' },
+        h('path', {
+          d: 'M4.4 4.4 11.6 11.6M11.6 4.4 4.4 11.6',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 2,
+          strokeLinecap: 'round',
+        }),
+      );
+    }
+
     /**
      * The composer button: rewrite the whole draft with the selected model.
      *
-     * A successful rewrite replaces the draft through `inputActions.setDraft`, a
-     * whole-document write the editor merges into its history rather than
-     * recording as a separate undo step — so the button only applies an answer
-     * whose draft revision is still current. A failure leaves the draft
-     * untouched and surfaces the reason in a bubble anchored above the button.
+     * Clicking while a rewrite runs cancels it. The browser aborts the fetch, the
+     * harness bridge turns the closed socket into an aborted request signal, and
+     * the provider call stops with it — so a cancel also stops the tokens being
+     * generated, not just the display of them.
+     *
+     * An answer that arrives anyway replaces the draft as it stands. The click is
+     * the authority: text typed while the rewrite ran is overwritten rather than
+     * turning the result into an error.
      */
     function OptimizeButton(props) {
       const t = props.t;
       const draft = props.useInput((s) => s.draft);
-      const draftRev = props.useInput((s) => s.draftRev);
       const [busy, setBusy] = React.useState(false);
       const [error, setError] = React.useState('');
       const alive = React.useRef(true);
-      // Mirrors the newest revision so the comparison after `await` reads the
-      // committed value rather than the one captured at click time.
-      const liveRev = React.useRef(draftRev);
-      React.useEffect(() => {
-        liveRev.current = draftRev;
-      }, [draftRev]);
+      const inflight = React.useRef(null);
 
       React.useEffect(
         () => () => {
           alive.current = false;
+          inflight.current?.abort();
+          inflight.current = null;
         },
         [],
       );
@@ -205,17 +211,22 @@ window.__ModuleLoader__.load({
       }, [error]);
 
       const empty = draft.trim() === '';
-      const disabled = busy || empty;
+      // A running rewrite stays clickable: the same button cancels it.
+      const disabled = busy ? false : empty;
 
       async function run() {
-        if (busy) return;
+        if (busy) {
+          inflight.current?.abort();
+          return;
+        }
         const text = draft;
-        const clickedRev = draftRev;
         const model = props.readModel();
         if (!isModelReady(model)) {
           setError(t('noModel'));
           return;
         }
+        const controller = new AbortController();
+        inflight.current = controller;
         setBusy(true);
         setError('');
         try {
@@ -223,20 +234,20 @@ window.__ModuleLoader__.load({
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(buildRequest(text, model)),
+            signal: controller.signal,
           });
           const body = await response.json().catch(() => null);
           if (!response.ok) throw new Error(errorText(response.status, body));
           const next = body && typeof body.text === 'string' ? body.text : '';
           if (next === '') throw new Error(t('emptyResponse'));
-          if (!alive.current) return;
-          if (!canApply(clickedRev, liveRev.current)) {
-            setError(t('draftChanged'));
-            return;
-          }
+          if (!alive.current || controller.signal.aborted) return;
           props.inputActions.setDraft(next);
         } catch (e) {
+          // A cancel is the user's own doing: no bubble, no message.
+          if (controller.signal.aborted) return;
           if (alive.current) setError(String((e && e.message) || e));
         } finally {
+          if (inflight.current === controller) inflight.current = null;
           if (alive.current) setBusy(false);
         }
       }
@@ -250,13 +261,15 @@ window.__ModuleLoader__.load({
           {
             type: 'button',
             className: 'dsh-po-button',
-            'aria-label': busy ? t('busy') : t('action'),
-            title: empty ? t('emptyDraft') : error !== '' ? error : t('action'),
+            'data-busy': busy ? 'true' : undefined,
+            'aria-label': busy ? t('cancel') : t('action'),
+            title: busy ? t('cancel') : empty ? t('emptyDraft') : error !== '' ? error : t('action'),
             'aria-busy': busy ? 'true' : undefined,
             disabled,
             onClick: run,
           },
           busy ? h(SpinnerIcon) : h(SparkleIcon),
+          busy ? h(CancelIcon) : null,
         ),
         error !== ''
           ? h('span', { className: 'dsh-po-error', role: 'alert' }, error)
@@ -454,7 +467,7 @@ window.__ModuleLoader__.load({
           ),
         );
       },
-      __test: { NS, API, isModelReady, buildRequest, errorText, canApply, ZH, EN },
+      __test: { NS, API, isModelReady, buildRequest, errorText, ZH, EN },
     };
   },
 });

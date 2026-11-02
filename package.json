@@ -1,6 +1,6 @@
 {
   "name": "@dsh-contrib/dsh-prompt-optimizer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Rewrite the composer draft with the model selected in the composer.",
   "private": true,
   "type": "module",

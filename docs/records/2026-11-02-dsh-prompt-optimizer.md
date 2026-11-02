@@ -58,3 +58,23 @@
 **修复**：点击时记下 `draftRev`，返回时版本不一致就不再替换，改为提示「草稿已改动，本次结果未替换」；纯函数 `canApply(clickedRev, currentRev)` 导出到 `__test` 并加单测。没有改用 `insertText`，因为它的 span 走 detect 坐标，带文件引用的草稿上 `detectText` 与 `clipboardText` 长度可能不同，整篇替换用 `setDraft` 才是安全路径。
 
 **仍未运行时验证**：以上结论来自源码与单测，浏览器里的实际观感（气泡位置、按钮状态、真实改写）依旧待人工确认。
+
+## v0.1.2：可取消 + 静默覆盖（用户决定，推翻 v0.1.1 的守卫）
+
+用户 2026-11-02 的决定：改写期间再点一次按钮应**取消**；改写期间草稿被改动就**静默覆盖**，不要报错。v0.1.1 的 `draftRev` 守卫与「草稿已改动」提示因此移除。
+
+**取消链路（源码可证）**：
+
+| 环节 | 依据 |
+|---|---|
+| 点击时建 `AbortController`，`fetch(..., {signal})`；busy 时再点调 `abort()` | `client.js` `run()` |
+| 浏览器断开 → `res.on("close")` 触发 `abort.abort()`，请求带上 `signal: abort.signal` | `dsh-client-connection/lib/index.js` L41-44、L75-87 |
+| 我们的路由把 `req.signal` 传进 `optimizeDraft`，再传给 `call.stream({signal})` | `lib/routes.js`、`lib/optimize.js` L104-109 |
+
+所以取消是真的中止 provider 生成，不只是丢掉显示结果。取消时不弹错误：`catch` 里判 `controller.signal.aborted` 直接返回。
+
+**界面**：busy 时按钮不再禁用（否则无法取消），草稿被清空也不影响取消；悬停或键盘聚焦时转圈图标换成叉号，`aria-label` / `title` 变为「取消优化」。
+
+**代价（用户已接受）**：改写期间新输入的文字会被结果覆盖，没有二次确认。
+
+**仍未运行时验证**：同前，浏览器观感与真实取消效果需人工确认。

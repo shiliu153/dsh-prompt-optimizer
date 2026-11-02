@@ -282,16 +282,11 @@ test('the client bundle exposes its pure helpers', () => {
   // Every key the button can raise must exist in both dictionaries, or a
   // localized build would surface the raw key instead of a sentence.
   for (const dictionary of [ZH, EN]) {
-    assert.equal(typeof dictionary.draftChanged, 'string');
-    assert.notEqual(dictionary.draftChanged, '');
+    for (const key of ['action', 'cancel', 'emptyDraft', 'noModel', 'emptyResponse']) {
+      assert.equal(typeof dictionary[key], 'string', `missing dictionary key: ${key}`);
+      assert.notEqual(dictionary[key], '', `empty dictionary value: ${key}`);
+    }
   }
-});
-
-test('a rewrite only replaces the draft it was computed from', () => {
-  const { canApply } = loadClient().__test;
-  assert.equal(canApply(3, 3), true);
-  assert.equal(canApply(3, 4), false, 'typing during the request must block the replacement');
-  assert.equal(canApply(0, 0), true);
 });
 
 // ---- manifest ----
