@@ -78,3 +78,19 @@
 **代价（用户已接受）**：改写期间新输入的文字会被结果覆盖，没有二次确认。
 
 **仍未运行时验证**：同前，浏览器观感与真实取消效果需人工确认。
+
+## 收尾：项目终止
+
+**原因**：用户找到了功能等价的现成插件 `dsh-prompt-optimizer@2.0.3`（npm，bundle 条目同名、同为 Web 客户端插件，自带 SSE 流式与推理展示），本项目不再需要，也不再继续开发。
+
+**处置（2026-11-02）**：
+
+| 项 | 状态 |
+|---|---|
+| `desktop` profile 的依赖与 bundles 条目 | 已不含 `@dsh-contrib/dsh-prompt-optimizer`；用户改用了 `dsh-prompt-optimizer@^2.0.3` |
+| `node_modules/@dsh-contrib/dsh-prompt-optimizer` | 移除后残留的符号链接已删除（确认指向本工作区后仅删链接）；工作区源码未受影响 |
+| `~/.dsh/prompt-optimizer.json` | 从未生成（用户没在设置页保存过），无需清理 |
+| 临时提取目录 `.tmp-dsh-src/` | 已删除（5.6 MB） |
+| 远端仓库 | 保留：`shiliu153/dsh-prompt-optimizer`，master 至 `8f27c3d`，tag `v0.1.0`，release `v0.1.0` |
+
+**未完成项（随终止作废）**：浏览器内的视觉与交互从未人工确认；`0.1.1` / `0.1.2` 只改了代码与文档，没有打 tag，也没有 release。仓库是否归档或删除，留给用户决定。

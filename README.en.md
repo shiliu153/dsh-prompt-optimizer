@@ -2,6 +2,9 @@
 
 [English](README.en.md) | [中文](README.md)
 
+> **Unmaintained.** The feature is covered by the existing `dsh-prompt-optimizer@2.0.3`
+> package; this repository is kept as an archive and is no longer updated.
+
 A [DeepSeek Harness](https://github.com/topics/dsh-plugin) bundle that adds one button
 to the left of the composer's model selector: it rewrites the draft with **the model
 you have selected** and puts the result back into the composer. The rewrite
