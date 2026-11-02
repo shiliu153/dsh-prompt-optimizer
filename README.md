@@ -28,7 +28,17 @@
 
 ### 安装
 
-从仓库安装：
+标准方式：在 DSH Web 侧边栏打开 **插件**，点 **添加插件**，把仓库地址填进包名字段：
+
+```
+https://github.com/shiliu153/dsh-prompt-optimizer
+```
+
+装完后点 **立即启用**。插件页会先让 Host 读一遍这个 spec、再跑 pnpm，并把包加进当前 profile 的 bundles——这一步不要手工改 profile 的 `package.json`。
+
+如果这个插件此前是以本地目录链接（`link:`）方式装进来的，先在该插件卡片上 **移除**，再按上面的地址重装：同一个 profile 里对已存在的包再次安装会被直接拒绝。
+
+Agent 侧等价调用（仅在启用了 `plugin_manager` 工具的 profile 里可用；Desktop 默认关闭该工具）：
 
 ```
 plugin_manager install_bundle https://github.com/shiliu153/dsh-prompt-optimizer
@@ -178,15 +188,7 @@ node --test "test/*.test.mjs"        # 22 个测试，零依赖
 node scripts/check-bundle.mjs .      # bundle 合规自检，失败时退出码非零
 ```
 
-安装到本机 profile 的方式（与 DSH 的插件安装流程等价）：
-
-```sh
-# ~/.dsh/profiles/<profile>/package.json
-#   dependencies: "@dsh-contrib/dsh-prompt-optimizer": "link:<本目录绝对路径>"
-#   dsh.profile.bundles: 追加 "@dsh-contrib/dsh-prompt-optimizer"
-cd ~/.dsh/profiles/<profile>
-node <pnpm>/bin/pnpm.cjs install
-```
+装进某个 profile 一律走标准通道：**插件页 → 添加插件**（Host 读 spec、跑 pnpm、选中 bundle，一次做完）。不要手写 profile 的 `package.json` 或 `dsh.profile.bundles`，也不要自己在 profile 目录里跑 pnpm——那正是插件页替你做的三件事，手工做会漏掉校验与选中步骤。
 
 改完代码需要重启 DSH 桌面端才会加载新的模块版本。
 

@@ -9,7 +9,23 @@ instruction itself is editable in Settings.
 
 ## Install
 
-From the repository:
+The standard way: open **Plugins** in the DSH Web sidebar, choose **Add plugin**, and
+put the repository address in the package field:
+
+```
+https://github.com/shiliu153/dsh-prompt-optimizer
+```
+
+Then choose **Enable now**. The page first has the Host read the spec, then runs pnpm
+and adds the package to the current profile's bundles — do not edit the profile's
+`package.json` by hand.
+
+If this plugin was installed earlier as a local directory link (`link:`), remove it
+from its card first and install again from the address above: installing a package
+that already exists in the same profile is refused.
+
+The equivalent agent call (only where the `plugin_manager` tool is enabled; Desktop
+ships it switched off):
 
 ```
 plugin_manager install_bundle https://github.com/shiliu153/dsh-prompt-optimizer
@@ -154,14 +170,10 @@ node --test "test/*.test.mjs"        # 22 tests, zero dependencies
 node scripts/check-bundle.mjs .      # bundle compliance self-check, non-zero on failure
 ```
 
-Installing into a local profile (the same steps DSH's installer performs):
-
-```sh
-# ~/.dsh/profiles/<profile>/package.json
-#   dependencies: "@dsh-contrib/dsh-prompt-optimizer": "link:<absolute path to this directory>"
-#   dsh.profile.bundles: append "@dsh-contrib/dsh-prompt-optimizer"
-cd ~/.dsh/profiles/<profile>
-node <pnpm>/bin/pnpm.cjs install
-```
+Install into a profile only through the standard channel: **Plugins → Add plugin**,
+where the Host reads the spec, runs pnpm, and selects the bundle in one pass. Do not
+hand-write the profile's `package.json` or `dsh.profile.bundles`, and do not run pnpm
+in the profile directory yourself — those are the three steps the page performs, and
+doing them by hand skips its validation and selection.
 
 Restart the DSH desktop app after changing this bundle's code.
